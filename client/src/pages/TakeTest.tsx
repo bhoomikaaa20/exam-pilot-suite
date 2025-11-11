@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ArrowLeft, Send } from "lucide-react";
 import TestResult from "@/components/student/TestResult";
+import { testService, Test } from "@/services/tests";
+import { resultService, Answer } from "@/services/results";
 
 const TakeTest = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [test, setTest] = useState<any>(null);
+  const [test, setTest] = useState<Test | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -24,14 +25,12 @@ const TakeTest = () => {
 
   const loadTest = async () => {
     try {
-      const { data: testData, error } = await supabase
-        .from("tests")
-        .select("*")
-        .eq("id", testId)
-        .single();
+      if (!testId) {
+        navigate("/student");
+        return;
+      }
 
-      if (error) throw error;
-
+      const testData = await testService.getTestById(testId);
       setTest(testData);
     } catch (error: any) {
       toast.error("Failed to load test");
@@ -43,7 +42,7 @@ const TakeTest = () => {
 
   const handleSubmit = async () => {
     // Validate all answers are filled
-    const totalQuestions = test.num_questions;
+    const totalQuestions = test!.numQuestions;
     const answeredQuestions = Object.keys(answers).length;
 
     if (answeredQuestions < totalQuestions) {
@@ -54,48 +53,23 @@ const TakeTest = () => {
     setSubmitting(true);
 
     try {
-      // Fetch correct answers
-      const { data: questions, error: questionsError } = await supabase
-        .from("test_questions")
-        .select("*")
-        .eq("test_id", testId)
-        .order("question_number");
+      // Convert answers to the format expected by API
+      const answersArray: Answer[] = Object.entries(answers).map(([questionIndex, selectedAnswer]) => ({
+        questionIndex: parseInt(questionIndex) - 1, // Convert to 0-based index
+        selectedAnswer: ['a', 'b', 'c', 'd'].indexOf(selectedAnswer.toLowerCase())
+      }));
 
-      if (questionsError) throw questionsError;
-
-      // Calculate score
-      let correctCount = 0;
-      questions.forEach((q) => {
-        const studentAnswer = answers[q.question_number]?.trim().toLowerCase();
-        const correctAnswer = q.correct_answer.trim().toLowerCase();
-        if (studentAnswer === correctAnswer) {
-          correctCount++;
-        }
+      // Submit result
+      const resultData = await resultService.submitResult({
+        testId: testId!,
+        answers: answersArray
       });
 
-      const percentage = (correctCount / totalQuestions) * 100;
-
-      // Save result
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { error: resultError } = await supabase
-        .from("test_results")
-        .upsert({
-          test_id: testId,
-          student_id: user!.id,
-          student_answers: answers,
-          score: correctCount,
-          total_questions: totalQuestions,
-          percentage: percentage,
-        });
-
-      if (resultError) throw resultError;
-
       setResult({
-        score: correctCount,
-        total: totalQuestions,
-        percentage: percentage,
-        wrong: totalQuestions - correctCount,
+        score: resultData.score,
+        total: resultData.totalQuestions,
+        percentage: resultData.percentage,
+        wrong: resultData.totalQuestions - resultData.score,
       });
 
       toast.success("Test submitted successfully!");
@@ -133,7 +107,7 @@ const TakeTest = () => {
           <CardHeader>
             <CardTitle className="text-2xl">{test.title}</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Total Questions: {test.num_questions}
+              Total Questions: {test.numQuestions}
             </p>
           </CardHeader>
         </Card>
@@ -145,7 +119,7 @@ const TakeTest = () => {
             </CardHeader>
             <CardContent>
               <iframe
-                src={test.pdf_url}
+                src={test.pdfUrl}
                 className="w-full h-[600px] border rounded-md"
                 title="Test PDF"
               />
@@ -157,7 +131,7 @@ const TakeTest = () => {
               <CardTitle className="text-lg">Your Answers</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {Array.from({ length: test.num_questions }, (_, i) => i + 1).map((qNum) => (
+              {Array.from({ length: test.numQuestions }, (_, i) => i + 1).map((qNum) => (
                 <div key={qNum} className="flex items-center gap-3">
                   <Label className="w-24 text-sm font-medium">Q{qNum}:</Label>
                   <Input

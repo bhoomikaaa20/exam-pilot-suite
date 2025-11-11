@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { testService, Test } from "@/services/tests";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const TestList = () => {
-  const [tests, setTests] = useState<any[]>([]);
+  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -27,17 +27,8 @@ const TestList = () => {
 
   const loadTests = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from("tests")
-        .select("*")
-        .eq("created_by", user!.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      setTests(data || []);
+      const tests = await testService.getAllTests();
+      setTests(tests);
     } catch (error: any) {
       toast.error("Failed to load tests");
     } finally {
@@ -47,12 +38,10 @@ const TestList = () => {
 
   const handleDelete = async (testId: string) => {
     try {
-      const { error } = await supabase.from("tests").delete().eq("id", testId);
-
-      if (error) throw error;
+      await testService.deleteTest(testId);
 
       toast.success("Test deleted successfully");
-      setTests(tests.filter((t) => t.id !== testId));
+      setTests(tests.filter((t) => t._id !== testId));
       setDeleteId(null);
     } catch (error: any) {
       toast.error("Failed to delete test");
@@ -81,7 +70,7 @@ const TestList = () => {
     <>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tests.map((test) => (
-          <Card key={test.id} className="shadow-card hover:shadow-elevated transition-shadow">
+          <Card key={test._id} className="shadow-card hover:shadow-elevated transition-shadow">
             <CardHeader>
               <CardTitle className="text-lg flex items-start gap-2">
                 <FileText className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
@@ -89,26 +78,26 @@ const TestList = () => {
               </CardTitle>
               <CardDescription className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {format(new Date(test.created_at), "MMM dd, yyyy")}
+                {format(new Date(test.createdAt), "MMM dd, yyyy")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-sm text-muted-foreground">
-                Questions: <span className="font-medium text-foreground">{test.num_questions}</span>
+                Questions: <span className="font-medium text-foreground">{test.numQuestions}</span>
               </div>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={() => window.open(test.pdf_url, "_blank")}
+                  onClick={() => window.open(test.pdfUrl, "_blank")}
                 >
                   View PDF
                 </Button>
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => setDeleteId(test.id)}
+                  onClick={() => setDeleteId(test._id)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

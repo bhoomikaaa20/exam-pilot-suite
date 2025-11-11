@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Upload } from "lucide-react";
+import { testService } from "@/services/tests";
 
 interface TestUploadDialogProps {
   open: boolean;
@@ -45,54 +45,41 @@ const TestUploadDialog = ({ open, onOpenChange }: TestUploadDialogProps) => {
     setUploading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Upload PDF to storage
-      const fileExt = pdfFile.name.split('.').pop();
-      const fileName = `${user!.id}_${Date.now()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("test-pdfs")
-        .upload(fileName, pdfFile);
+      // First, upload the PDF file
+      const fileFormData = new FormData();
+      fileFormData.append('file', pdfFile);
 
-      if (uploadError) throw uploadError;
+      const axios = (await import('axios')).default;
+      const API_URL = (await import('@/services/api')).default.defaults.baseURL?.replace('/api', '');
+      const uploadResponse = await axios.post(`${API_URL}/upload`, fileFormData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("test-pdfs")
-        .getPublicUrl(fileName);
+      const pdfUrl = uploadResponse.data.path;
 
-      // Create test record
-      const { data: testData, error: testError } = await supabase
-        .from("tests")
-        .insert({
-          title,
-          pdf_url: publicUrl,
-          num_questions: numQuestions,
-          created_by: user!.id,
-        })
-        .select()
-        .single();
-
-      if (testError) throw testError;
-
-      // Insert questions and answers
-      const questionsData = Object.entries(answers).map(([qNum, answer]) => ({
-        test_id: testData.id,
-        question_number: parseInt(qNum),
-        correct_answer: answer.trim(),
+      // Now create the test with the PDF URL
+      const questions = Object.entries(answers).map(([qNum, answer]) => ({
+        question: `Question ${qNum}`,
+        options: ['a', 'b', 'c', 'd'], // Placeholder options, adjust as needed
+        correctAnswer: ['a', 'b', 'c', 'd'].indexOf(answer.trim().toLowerCase()),
       }));
 
-      const { error: questionsError } = await supabase
-        .from("test_questions")
-        .insert(questionsData);
-
-      if (questionsError) throw questionsError;
+      await testService.createTest({
+        title,
+        pdfUrl,
+        numQuestions,
+        questions,
+      });
 
       toast.success("Test uploaded successfully!");
       onOpenChange(false);
       resetForm();
       window.location.reload();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to upload test");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to upload test";
+      toast.error(message);
     } finally {
       setUploading(false);
     }
