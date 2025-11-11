@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -9,6 +8,7 @@ import TestUploadDialog from "@/components/admin/TestUploadDialog";
 import TestList from "@/components/admin/TestList";
 import ResultsList from "@/components/admin/ResultsList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { authService } from "@/services/auth";
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -21,31 +21,24 @@ const AdminDashboard = () => {
   }, []);
 
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
+    try {
+      const response = await authService.verifyToken();
+
+      if (!response.valid || response.user.role !== "admin") {
+        toast.error("Access denied. Admin only.");
+        navigate("/auth");
+        return;
+      }
+
+      setProfile(response.user);
+      setLoading(false);
+    } catch (error) {
       navigate("/auth");
-      return;
     }
-
-    const { data: profileData, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single();
-
-    if (error || profileData?.role !== "admin") {
-      toast.error("Access denied. Admin only.");
-      navigate("/auth");
-      return;
-    }
-
-    setProfile(profileData);
-    setLoading(false);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authService.logout();
     toast.success("Logged out successfully");
     navigate("/auth");
   };

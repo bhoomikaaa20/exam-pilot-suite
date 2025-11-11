@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { BookOpen, LogOut } from "lucide-react";
 import AvailableTests from "@/components/student/AvailableTests";
+import { authService } from "@/services/auth";
 
 const StudentDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -16,31 +16,24 @@ const StudentDashboard = () => {
   }, []);
 
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
+    try {
+      const response = await authService.verifyToken();
+
+      if (!response.valid || response.user.role !== "student") {
+        toast.error("Access denied. Student only.");
+        navigate("/auth");
+        return;
+      }
+
+      setProfile(response.user);
+      setLoading(false);
+    } catch (error) {
       navigate("/auth");
-      return;
     }
-
-    const { data: profileData, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single();
-
-    if (error || profileData?.role !== "student") {
-      toast.error("Access denied. Student only.");
-      navigate("/auth");
-      return;
-    }
-
-    setProfile(profileData);
-    setLoading(false);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authService.logout();
     toast.success("Logged out successfully");
     navigate("/auth");
   };

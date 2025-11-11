@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { authService } from "@/services/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,44 +24,29 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const response = await authService.login({ email, password });
 
-        if (error) throw error;
-
-        // Fetch user profile to get role
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
-
-        if (profileError) throw profileError;
+        // Store token
+        localStorage.setItem('token', response.token);
 
         toast.success("Logged in successfully!");
-        navigate(profile.role === "admin" ? "/admin" : "/student");
+        navigate(response.user.role === "admin" ? "/admin" : "/student");
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        const response = await authService.register({
           email,
           password,
-          options: {
-            data: {
-              full_name: fullName,
-              role: role,
-            },
-            emailRedirectTo: `${window.location.origin}/`,
-          },
+          fullName,
+          role
         });
 
-        if (error) throw error;
+        // Store token
+        localStorage.setItem('token', response.token);
 
         toast.success("Account created! Logging you in...");
-        navigate(role === "admin" ? "/admin" : "/student");
+        navigate(response.user.role === "admin" ? "/admin" : "/student");
       }
     } catch (error: any) {
-      toast.error(error.message || "Authentication failed");
+      toast.error(error?.response?.data?.error || error.message || "Authentication failed");
     } finally {
       setLoading(false);
     }

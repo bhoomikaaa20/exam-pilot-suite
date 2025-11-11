@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { resultService, Result } from "@/services/results";
 
 const ResultsList = () => {
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,18 +16,8 @@ const ResultsList = () => {
 
   const loadResults = async () => {
     try {
-      const { data, error } = await supabase
-        .from("test_results")
-        .select(`
-          *,
-          tests (title),
-          profiles (full_name, email)
-        `)
-        .order("submitted_at", { ascending: false });
-
-      if (error) throw error;
-
-      setResults(data || []);
+      const resultsData = await resultService.getAllResults();
+      setResults(resultsData);
     } catch (error: any) {
       toast.error("Failed to load results");
     } finally {
@@ -72,16 +62,16 @@ const ResultsList = () => {
           </TableHeader>
           <TableBody>
             {results.map((result) => (
-              <TableRow key={result.id}>
+              <TableRow key={result._id}>
                 <TableCell>
                   <div>
-                    <div className="font-medium">{result.profiles?.full_name || "Unknown"}</div>
-                    <div className="text-sm text-muted-foreground">{result.profiles?.email}</div>
+                    <div className="font-medium">{result.studentId?.fullName || "Unknown"}</div>
+                    <div className="text-sm text-muted-foreground">{result.studentId?.email}</div>
                   </div>
                 </TableCell>
-                <TableCell>{result.tests?.title}</TableCell>
+                <TableCell>{result.testId?.title}</TableCell>
                 <TableCell className="text-center">
-                  {result.score}/{result.total_questions}
+                  {result.score}/{result.totalQuestions}
                 </TableCell>
                 <TableCell className="text-center font-semibold">
                   {result.percentage.toFixed(1)}%
@@ -90,7 +80,7 @@ const ResultsList = () => {
                   {getScoreBadge(result.percentage)}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {format(new Date(result.submitted_at), "MMM dd, yyyy HH:mm")}
+                  {format(new Date(result.submittedAt), "MMM dd, yyyy HH:mm")}
                 </TableCell>
               </TableRow>
             ))}
