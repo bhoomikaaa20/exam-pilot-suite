@@ -44,6 +44,12 @@ export const createTest = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    // Validate PDF URL format (Cloudinary URLs or backward compatible local paths)
+    if (!pdfUrl.startsWith('http') && !pdfUrl.startsWith('/uploads/')) {
+      res.status(400).json({ error: 'Invalid PDF URL format' });
+      return;
+    }
+
     if (numQuestions !== questions.length) {
       res.status(400).json({ error: 'Number of questions does not match questions array length' });
       return;
@@ -106,6 +112,12 @@ export const updateTest = async (req: Request, res: Response): Promise<void> => 
     // Validation similar to create
     if (numQuestions && questions && numQuestions !== questions.length) {
       res.status(400).json({ error: 'Number of questions does not match questions array length' });
+      return;
+    }
+
+    // Validate PDF URL format if provided
+    if (pdfUrl && !pdfUrl.startsWith('http') && !pdfUrl.startsWith('/uploads/')) {
+      res.status(400).json({ error: 'Invalid PDF URL format' });
       return;
     }
 

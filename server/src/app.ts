@@ -4,19 +4,16 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 
+// Load environment variables before importing modules that use them
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
 // Import routes
 import authRoutes from './routes/auth';
 import testRoutes from './routes/test';
 import resultRoutes from './routes/result';
 
 // Import middleware
-import { uploadPDF, handleMulterError } from './middleware/upload';
-
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-
-// Override with server-specific .env if exists
-dotenv.config({ path: path.join(__dirname, '../.env'), override: true });
-
+import { uploadPDF, handleMulterError, uploadToCloudinary } from './middleware/upload';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -25,7 +22,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files statically
+// Backward compatibility: Serve uploaded files statically for existing local files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Database connection
@@ -44,16 +41,23 @@ app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Exam Pilot Backend API' });
 });
 
-// File upload route with PDF validation
-app.post('/upload', uploadPDF.single('file'), handleMulterError, (req: Request, res: Response) => {
+// File upload route with PDF/HWP validation and Cloudinary upload
+app.post('/upload', uploadPDF.single('file'), handleMulterError, async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  res.json({
-    message: 'File uploaded successfully',
-    filename: req.file.filename,
-    path: `/uploads/${req.file.filename}`
-  });
+
+  try {
+    const result = await uploadToCloudinary(req.file);
+    res.json({
+      message: 'File uploaded successfully',
+      filename: result.public_id,
+      path: result.secure_url
+    });
+  } catch (error) {
+    console.error('Cloudinary upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file to cloud storage' });
+  }
 });
 
 // API routes
