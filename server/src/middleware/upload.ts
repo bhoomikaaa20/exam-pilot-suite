@@ -38,7 +38,8 @@ export const uploadToCloudinary = (file: Express.Multer.File): Promise<UploadApi
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: 'exam-pilot/tests',
-        resource_type: 'auto',
+        resource_type: 'raw', // Raw resource type for non-image files
+        format: 'pdf', // Explicitly set format for PDFs
         public_id: `${Date.now()}-${Math.round(Math.random() * 1E9)}`,
       },
       (error, result) => {
