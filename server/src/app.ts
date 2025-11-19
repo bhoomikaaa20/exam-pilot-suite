@@ -28,7 +28,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Database connection
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/exam_pilot');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://bhoomi:bhoomi@cluster0.q8toe4q.mongodb.net/?appName=Cluster0');
     console.log('MongoDB connected');
   } catch (error) {
     console.error('MongoDB connection error:', error);
